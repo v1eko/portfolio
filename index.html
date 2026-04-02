@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>彩色破片菜单</title>
+    <!-- 更新：引入外部现代高级粗体字体 Montserrat，字重改为 800，保证清晰度与现代感 -->
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #0d0d0d;
+            color: #eaeaea;
+            /* 更新：全局字体变更为现代无衬线字体 */
+            font-family: 'Montserrat', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden; /* 彻底锁定 body 滚动，交由独立页面处理 */
+        }
+
+        /* --- 页面视图切换系统 --- */
+        .view-page {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100vh;
+            transition: opacity 0.5s ease, visibility 0.5s ease, transform 0.5s ease;
+        }
+
+        /* 首屏特效区 */
+        #home-view {
+            z-index: 10;
+            background: radial-gradient(circle at center, #2b2b2b 0%, #0d0d0d 100%);
+            opacity: 1;
+            visibility: visible;
+            transform: scale(1);
+        }
+
+        /* 隐藏主页时的状态 */
+        #home-view.hidden {
+            opacity: 0;
+            visibility: hidden;
+            transform: scale(0.95); /* 微微缩放，增加空间感 */
+            pointer-events: none;
+        }
+
+        /* 二级详情页区 */
+        #detail-view {
+            z-index: 20;
+            background: #0d0d0d;
+            opacity: 0;
+            visibility: hidden;
+            overflow-y: auto; /* 允许在二级页面内上下滚动 */
+            overflow-x: hidden;
+        }
+
+        /* 显示二级页时的状态 */
+        #detail-view.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        /* 二级页面中的独立版块 */
+        .sub-page {
+            display: none;
+            animation: slideUpFade 0.6s ease forwards;
+        }
+
+        .sub-page.active {
+            display: block;
+        }
+
+        @keyframes slideUpFade {
+            from { opacity: 0; transform: translateY(40px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* 返回按钮样式 */
+        .back-btn {
+            position: fixed;
+            top: 40px;
+            left: 10%;
+            background: transparent;
+            color: #fff;
+            border: 1px solid rgba(255,255,255,0.2);
+            padding: 10px 20px;
+            border-radius: 30px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 100;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .back-btn:hover {
+            background: #fff;
+            color: #000;
+        }
+
+        canvas {
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* 删除了 instruction 相关的 CSS */
+
+        /* --- 网页内容区域样式 --- */
+        .content-section {
+            padding: 120px 10% 100px 10%; /* 顶部增加 padding 给返回按钮留空间 */
+            min-height: 100vh;
+        }
+
+        .section-title {
+            /* 更新：内容区标题字体 */
+            font-family: 'Montserrat', sans-serif;
+            font-size: 3rem;
+            margin-bottom: 50px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        /* 更新：各个区块的专属标题颜色 (同步全新的红黄蓝绿紫) */
+        #experiences .section-title { color: #ff4d4d; } /* 红 */
+        #certificates .section-title { color: #ffcc00; } /* 黄 */
+        #projects .section-title { color: #00ccff; } /* 蓝 */
+        #skills .section-title { color: #00ff66; } /* 绿 */
+        #contact .section-title { color: #a200ff; } /* 紫 */
+
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 12px;
+            transition: transform 0.3s ease, background 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .card h3 {
+            font-size: 1.5rem;
+            margin-bottom: 10px;
+            color: #fff;
+        }
+
+        .card p {
+            color: #aaa;
+            line-height: 1.6;
+            margin-bottom: 15px;
+        }
+        
+        .card .date {
+            font-size: 0.9rem;
+            color: #666;
+            margin-bottom: 15px;
+            display: block;
+        }
+
+        /* --- 更新：Experiences 交错式时间轴 (Alternating Timeline) 样式 --- */
+        .timeline {
+            position: relative;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px 0;
+        }
+        
+        /* 中间的垂直虚线 */
+        .timeline::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 50%;
+            margin-left: -1px;
+            border-left: 2px dashed rgba(255, 77, 77, 0.4);
+        }
+
+        .timeline-item {
+            width: 50%;
+            position: relative;
+            padding-bottom: 40px;
+        }
+
+        /* 左侧内容 */
+        .timeline-item:nth-child(odd) {
+            margin-left: 0;
+            padding-right: 40px;
+            text-align: right;
+        }
+
+        /* 右侧内容 */
+        .timeline-item:nth-child(even) {
+            margin-left: 50%;
+            padding-left: 40px;
+            text-align: left;
+        }
+
+        /* 居中的数字圆环 */
+        .timeline-circle {
+            position: absolute;
+            top: 15px;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #0d0d0d;
+            border: 2px solid #ff4d4d;
+            color: #ff4d4d;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 900;
+            font-size: 1.2rem;
+            z-index: 2;
+        }
+
+        .timeline-item:nth-child(odd) .timeline-circle { right: -20px; }
+        .timeline-item:nth-child(even) .timeline-circle { left: -20px; }
+
+        /* 连接圆环与卡片的水平虚线 */
+        .timeline-dash {
+            position: absolute;
+            top: 35px;
+            width: 40px;
+            border-top: 2px dashed rgba(255, 77, 77, 0.4);
+            z-index: 1;
+        }
+
+        .timeline-item:nth-child(odd) .timeline-dash { right: 0; }
+        .timeline-item:nth-child(even) .timeline-dash { left: 0; }
+
+        /* 内容卡片 */
+        .timeline-content {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 77, 77, 0.2);
+            padding: 30px;
+            border-radius: 12px;
+            transition: transform 0.3s ease, background 0.3s ease;
+            position: relative;
+        }
+
+        .timeline-content:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 77, 77, 0.5);
+        }
+
+        .timeline-item:nth-child(odd) .timeline-content:hover { transform: translateX(-5px); }
+        .timeline-item:nth-child(even) .timeline-content:hover { transform: translateX(5px); }
+
+        /* 标签 (Tag) */
+        .timeline-tag {
+            display: inline-block;
+            padding: 6px 14px;
+            background: rgba(255, 77, 77, 0.15);
+            color: #ff4d4d;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-bottom: 15px;
+        }
+
+        /* 年份大字 */
+        .timeline-year {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 2.2rem;
+            color: #ff4d4d;
+            margin-bottom: 10px;
+            font-weight: 900;
+        }
+
+        .timeline-content h3 {
+            font-size: 1.4rem;
+            color: #fff;
+            margin-bottom: 5px;
+        }
+
+        .timeline-content .company {
+            font-size: 1rem;
+            color: #888;
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
+
+        .timeline-content p {
+            color: #aaa;
+            line-height: 1.6;
+            font-size: 0.95rem;
+        }
+
+        /* 移动端自适应：屏幕变小时改为左对齐 */
+        @media screen and (max-width: 768px) {
+            .timeline::before { left: 20px; margin-left: 0; }
+            .timeline-item { width: 100%; margin-left: 0 !important; padding-left: 60px !important; padding-right: 0 !important; text-align: left !important; }
+            .timeline-circle { left: 0 !important; right: auto !important; }
+            .timeline-dash { left: 40px !important; right: auto !important; width: 20px; }
+            .timeline-item:nth-child(odd) .timeline-content:hover { transform: translateX(5px); }
+        }
+
+        /* 技能标签样式 */
+        .skills-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .skill-tag {
+            padding: 10px 20px;
+            background: rgba(0, 255, 102, 0.1); /* 同步改为绿色系 */
+            border: 1px solid rgba(0, 255, 102, 0.3);
+            border-radius: 30px;
+            font-weight: bold;
+            color: #00ff66;
+            transition: all 0.3s ease;
+        }
+        
+        .skill-tag:hover {
+            background: #00ff66;
+            color: #000; /* 绿色背景配黑色文字更清晰 */
+        }
+
+        /* --- 新增：图片弹窗 (Modal) 样式 --- */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(13, 13, 13, 0.9);
+            backdrop-filter: blur(10px);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 1;
+        }
+
+        .modal-content {
+            max-width: 90%;
+            max-height: 85vh;
+            border-radius: 8px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+            transform: scale(0.95);
+            transition: transform 0.3s ease;
+            object-fit: contain;
+        }
+
+        .modal.active .modal-content {
+            transform: scale(1);
+        }
+
+        .close-modal {
+            position: absolute;
+            top: 30px;
+            right: 40px;
+            color: #fff;
+            font-size: 40px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: color 0.3s ease;
+            z-index: 1001;
+        }
+
+        .close-modal:hover {
+            color: #ffcc00;
+        }
+
+        /* 可点击卡片的鼠标样式 */
+        .clickable-card {
+            cursor: pointer;
+        }
+
+        .clickable-card:hover {
+            border-color: rgba(255, 204, 0, 0.6) !important;
+        }
+
+        /* --- 新增：Contact 联系卡片专属排版 --- */
+        .contact-card {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .contact-icon {
+            width: 50px;
+            height: 50px;
+            fill: currentColor;
+            flex-shrink: 0;
+            transition: transform 0.3s ease;
+        }
+
+        .contact-card:hover .contact-icon {
+            transform: scale(1.1) rotate(5deg);
+        }
+
+        /* 隐藏原本的 toast 提示 */
+        #toast { display: none; }
+    </style>
+</head>
+<body>
+
+    <!-- 首屏特效区 (View 1) -->
+    <div id="home-view" class="view-page">
+        <canvas id="canvas"></canvas>
+        <!-- 删除了底部的 Hover 提示语句，保持画面极致纯净 -->
+    </div>
+
+    <!-- 真实内容展示区 / 二级页面 (View 2) -->
+    <div id="detail-view" class="view-page">
+        <button class="back-btn" onclick="goHome()">← Back to Menu</button>
+        
+        <main>
+            <!-- 更新：使用交错时间轴与极简文案 -->
+            <section id="experiences" class="content-section sub-page">
+                <h2 class="section-title">Experiences</h2>
+                <div class="timeline">
+                    <!-- 经历一 (VeeAlpha) -->
+                    <div class="timeline-item">
+                        <div class="timeline-dash"></div>
+                        <div class="timeline-circle">1</div>
+                        <div class="timeline-content">
+                            <span class="timeline-tag">Current Project</span>
+                            <div class="timeline-year">2026</div>
+                            <h3>VeeAlpha</h3>
+                            <div class="company">Financial Analysis Tool</div>
+                            <p>Developing a quantitative tool that evaluates and scores stocks to generate actionable recommendations, integrating multifaceted factors such as financial reports and news sentiment.</p>
+                        </div>
+                    </div>
+                    <!-- 经历二 (Westudy) -->
+                    <div class="timeline-item">
+                        <div class="timeline-dash"></div>
+                        <div class="timeline-circle">2</div>
+                        <div class="timeline-content">
+                            <span class="timeline-tag">Automation</span>
+                            <div class="timeline-year" style="font-size: 1.6rem; padding-top: 8px;">2023 - Current</div>
+                            <h3>Math Teacher</h3>
+                            <div class="company">Westudy Education Inc</div>
+                            <p>Developed a Python automated tracking tool to streamline metrics. Managed and analyzed multi-group performance for 50+ clients.</p>
+                        </div>
+                    </div>
+                    <!-- 经历三 (Climax Foods) -->
+                    <div class="timeline-item">
+                        <div class="timeline-dash"></div>
+                        <div class="timeline-circle">3</div>
+                        <div class="timeline-content">
+                            <span class="timeline-tag">Data Analyst</span>
+                            <div class="timeline-year">2021</div>
+                            <h3>Data & Analytics Intern</h3>
+                            <div class="company">Climax Foods</div>
+                            <p>Performed Exploratory Data Analysis (EDA) on large-scale datasets and collaborated to backtest quantitative trading strategies.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 更新：只保留两个证书，使用精准描述，并添加点击弹窗功能 -->
+            <section id="certificates" class="content-section sub-page">
+                <h2 class="section-title">Certificates</h2>
+                <div class="card-grid">
+                    <!-- IBM Data Science -->
+                    <!-- 更改路径：加入了 image/ 前缀 -->
+                    <div class="card clickable-card" style="border-color: rgba(255, 204, 0, 0.3);" onclick="openModal('image/IBM-data-cert.jpg')">
+                        <h3 style="color: #ffcc00;">IBM Data Science</h3>
+                        <span class="date">Professional Certificate | Issued: April 2023</span>
+                        <p>Completed IBM's professional certificate program covering data science methodology, Python, SQL, data analysis, data visualization, machine learning, and an applied capstone project.</p>
+                        <span style="font-size: 0.85rem; color: #ffcc00; font-weight: bold; display: inline-block; margin-top: 10px;">Click to view certificate ↗</span>
+                    </div>
+                    
+                    <!-- Real Estate License -->
+                    <!-- 更改路径：加入了 image/ 前缀 -->
+                    <div class="card clickable-card" style="border-color: rgba(255, 204, 0, 0.3);" onclick="openModal('image/RealEstate.jpg')">
+                        <h3 style="color: #ffcc00;">California Real Estate</h3>
+                        <span class="date">Salesperson License | Valid Through: December 2027</span>
+                        <p>Licensed by the State of California with a Real Estate Salesperson License, reflecting knowledge of real estate principles, regulation, and licensing standards.</p>
+                        <span style="font-size: 0.85rem; color: #ffcc00; font-weight: bold; display: inline-block; margin-top: 10px;">Click to view license ↗</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 更新：使用简历数据填充项目，并添加跳转外部网站功能 -->
+            <section id="projects" class="content-section sub-page">
+                <h2 class="section-title">Projects</h2>
+                <div class="card-grid">
+                    <!-- 项目一：点击后在新标签页打开外部链接 -->
+                    <div class="card clickable-card" style="border-color: rgba(0, 204, 255, 0.3);" onclick="window.open('./Stock_Anal_Project.html', '_blank')">
+                        <h3 style="color: #00ccff;">Stock Portfolio Optimization & Analysis</h3>
+                        <span class="date">CFA Project</span>
+                        <p>Performed comprehensive portfolio analysis, visualization, and optimization for equities and fixed income, determining the risk by simulation and Sharpe ratio.</p>
+                        <span style="font-size: 0.85rem; color: #00ccff; font-weight: bold; display: inline-block; margin-top: 10px;">View Project ↗</span>
+                    </div>
+                    
+                    <!-- 项目二：点击后在新标签页打开外部链接 -->
+                    <div class="card clickable-card" style="border-color: rgba(0, 204, 255, 0.3);" onclick="window.open('把这里换成你的第二个项目链接', '_blank')">
+                        <h3 style="color: #00ccff;">COVID-19 Case Prediction</h3>
+                        <span class="date">UC Berkeley Capstone</span>
+                        <p>Utilized regression and time-series forecasting techniques to predict case trends from 2021 large-scale health datasets.</p>
+                        <span style="font-size: 0.85rem; color: #00ccff; font-weight: bold; display: inline-block; margin-top: 10px;">View Project ↗</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 更新：使用简历数据填充技能 -->
+            <section id="skills" class="content-section sub-page">
+                <h2 class="section-title">Skills</h2>
+                <div class="skills-container">
+                    <div class="skill-tag">Python & SQL</div>
+                    <div class="skill-tag">Tableau</div>
+                    <div class="skill-tag">Data Visualization</div>
+                    <div class="skill-tag">Regression Analysis</div>
+                    <div class="skill-tag">Time-Series Theory</div>
+                    <div class="skill-tag">Financial Modeling</div>
+                    <div class="skill-tag">Portfolio Management</div>
+                    <div class="skill-tag">DCF & Asset Valuation</div>
+                    <div class="skill-tag">Advanced Excel</div>
+                    <div class="skill-tag">Applied Mathematics</div>
+                </div>
+            </section>
+
+            <!-- 新增：Contact 社交联系版块 -->
+            <section id="contact" class="content-section sub-page">
+                <h2 class="section-title">Contact</h2>
+                <div class="card-grid">
+                    
+                    <!-- LinkedIn -->
+                    <div class="card clickable-card contact-card" style="border-color: rgba(162, 0, 255, 0.3);" onmouseover="this.style.borderColor='rgba(162, 0, 255, 0.8)'" onmouseout="this.style.borderColor='rgba(162, 0, 255, 0.3)'" onclick="window.open('https://www.linkedin.com/in/hc0202/', '_blank')">
+                        <svg class="contact-icon" viewBox="0 0 24 24" style="color: #a200ff;">
+                            <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/>
+                        </svg>
+                        <div>
+                            <h3 style="color: #a200ff; margin-bottom: 5px;">LinkedIn</h3>
+                            <p style="margin-bottom: 0;">Connect with me professionally.</p>
+                        </div>
+                    </div>
+
+                    <!-- GitHub -->
+                    <div class="card clickable-card contact-card" style="border-color: rgba(162, 0, 255, 0.3);" onmouseover="this.style.borderColor='rgba(162, 0, 255, 0.8)'" onmouseout="this.style.borderColor='rgba(162, 0, 255, 0.3)'" onclick="window.open('https://github.com/v1eko', '_blank')">
+                        <svg class="contact-icon" viewBox="0 0 24 24" style="color: #a200ff;">
+                            <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                        </svg>
+                        <div>
+                            <h3 style="color: #a200ff; margin-bottom: 5px;">GitHub</h3>
+                            <p style="margin-bottom: 0;">Check out my code & projects.</p>
+                        </div>
+                    </div>
+
+                    <!-- Instagram -->
+                    <div class="card clickable-card contact-card" style="border-color: rgba(162, 0, 255, 0.3);" onmouseover="this.style.borderColor='rgba(162, 0, 255, 0.8)'" onmouseout="this.style.borderColor='rgba(162, 0, 255, 0.3)'" onclick="window.open('https://www.instagram.com/henry_vko/', '_blank')">
+                        <svg class="contact-icon" viewBox="0 0 24 24" style="color: #a200ff;">
+                            <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+                        </svg>
+                        <div>
+                            <h3 style="color: #a200ff; margin-bottom: 5px;">Instagram</h3>
+                            <p style="margin-bottom: 0;">Follow my daily updates.</p>
+                        </div>
+                    </div>
+
+                    <!-- Email / Mailto唤醒本地邮箱 -->
+                    <div class="card clickable-card contact-card" style="border-color: rgba(162, 0, 255, 0.3);" onmouseover="this.style.borderColor='rgba(162, 0, 255, 0.8)'" onmouseout="this.style.borderColor='rgba(162, 0, 255, 0.3)'" onclick="window.location.href='mailto:veekocareer@gmail.com'">
+                        <svg class="contact-icon" viewBox="0 0 24 24" style="color: #a200ff;">
+                            <path d="M0 3v18h24v-18h-24zm6.623 7.929l-4.623 5.712v-9.458l4.623 3.746zm-4.141-5.929h19.035l-9.517 7.713-9.518-7.713zm5.694 7.188l3.824 3.099 3.83-3.104 5.612 6.817h-18.833l5.567-6.812zm9.201-1.259l4.623-3.747v9.476l-4.623-5.729z"/>
+                        </svg>
+                        <div>
+                            <h3 style="color: #a200ff; margin-bottom: 5px;">Email</h3>
+                            <!-- 隐藏邮箱地址，改为点击提示 -->
+                            <p style="margin-bottom: 0;">Send me a message.</p>
+                        </div>
+                    </div>
+
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- 新增：全屏图片查看器弹窗 -->
+    <div id="image-modal" class="modal" onclick="closeModal()">
+        <span class="close-modal">&times;</span>
+        <img class="modal-content" id="modal-img" src="" alt="Certificate" onclick="event.stopPropagation()">
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+        let particleArray = [];
+        let wordBounds = []; // 记录每个单词的碰撞边界和状态
+
+        // 更新：新增了带有紫色的 ★ CONTACT 菜单项
+        const menuItems = [
+            { text: "▲  EXPERIENCES", colors: ['#ff4d4d', '#b30000'], target: "experiences" }, // 红：亮樱桃红 + 深血红
+            { text: "●  CERTIFICATES", colors: ['#ffcc00', '#e68a00'], target: "certificates" }, // 黄：亮明黄 + 深橘黄
+            { text: "✖  PROJECTS",     colors: ['#00ccff', '#0055ff'], target: "projects" },     // 蓝：亮霓虹蓝 + 深海蓝
+            { text: "■  SKILLS",       colors: ['#00ff66', '#008033'], target: "skills" },       // 绿：亮荧光绿 + 深暗绿
+            { text: "★  CONTACT",      colors: ['#a200ff', '#4b0082'], target: "contact" }       // 紫：亮赛博紫 + 深靛紫
+        ];
+
+        const mouse = { x: null, y: null }
+
+        // --- 事件监听 ---
+        // 将事件绑定在 canvas 上，防止页面滚动后坐标错乱
+        canvas.addEventListener('mousemove', function(event) {
+            const rect = canvas.getBoundingClientRect();
+            mouse.x = event.clientX - rect.left;
+            mouse.y = event.clientY - rect.top;
+            checkExplosion();
+        });
+
+        canvas.addEventListener('mouseleave', function() {
+            mouse.x = null;
+            mouse.y = null;
+            resetAllExplosions();
+        });
+
+        // 监听点击事件，打开二级页面
+        canvas.addEventListener('click', function(event) {
+            const rect = canvas.getBoundingClientRect();
+            const clickX = event.clientX - rect.left;
+            const clickY = event.clientY - rect.top;
+            const padding = 15; 
+
+            for (let i = 0; i < wordBounds.length; i++) {
+                let wb = wordBounds[i];
+                let isClicked = (
+                    clickX >= wb.x - padding &&
+                    clickX <= wb.x + wb.w + padding &&
+                    clickY >= wb.y - padding &&
+                    clickY <= wb.y + wb.h + padding
+                );
+
+                if (isClicked) {
+                    openPage(menuItems[i].target);
+                }
+            }
+        });
+
+        // 打开特定二级页面的逻辑
+        function openPage(targetId) {
+            // 1. 隐藏主页特效区
+            document.getElementById('home-view').classList.add('hidden');
+            
+            // 2. 显示详情页面容器
+            const detailView = document.getElementById('detail-view');
+            detailView.classList.add('active');
+            detailView.scrollTop = 0; // 重置滚动条到顶部
+
+            // 3. 隐藏所有子版块，只显示被点击的那个
+            document.querySelectorAll('.sub-page').forEach(page => {
+                page.classList.remove('active');
+            });
+            document.getElementById(targetId).classList.add('active');
+        }
+
+        // 返回主页菜单的逻辑
+        function goHome() {
+            // 1. 隐藏详情页面容器
+            document.getElementById('detail-view').classList.remove('active');
+            
+            // 2. 重新显示主页特效区
+            document.getElementById('home-view').classList.remove('hidden');
+            
+            // 3. 强制重置一下爆炸状态，防止碎片卡住
+            resetAllExplosions();
+        }
+
+        // --- 新增：图片弹窗逻辑 ---
+        function openModal(imageSrc) {
+            const modal = document.getElementById('image-modal');
+            const modalImg = document.getElementById('modal-img');
+            modalImg.src = imageSrc;
+            modal.style.display = 'flex';
+            
+            // 触发重绘以播放渐变动画
+            setTimeout(() => {
+                modal.classList.add('active');
+            }, 10);
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('image-modal');
+            modal.classList.remove('active');
+            
+            // 等待动画结束后隐藏
+            setTimeout(() => {
+                modal.style.display = 'none';
+            }, 300);
+        }
+
+        // --- 核心逻辑 ---
+
+        // 检查鼠标是否碰到了某个特定的单词
+        function checkExplosion() {
+            const padding = 15; // 触发区域的内边距容错
+            let isHoveringAny = false; // 用于判断鼠标是否需要变成小手
+
+            for (let i = 0; i < wordBounds.length; i++) {
+                let wb = wordBounds[i];
+                let isHovering = (
+                    mouse.x >= wb.x - padding &&
+                    mouse.x <= wb.x + wb.w + padding &&
+                    mouse.y >= wb.y - padding &&
+                    mouse.y <= wb.y + wb.h + padding
+                );
+
+                if (isHovering) {
+                    isHoveringAny = true; // 碰到了单词
+                    if (!wb.isExploded) {
+                        wb.isExploded = true;
+                        explodeWord(i); // 触发特定单词的爆炸
+                    }
+                } else {
+                    wb.isExploded = false; // 鼠标离开，单词恢复
+                }
+            }
+
+            // 动态更改鼠标样式：碰到字变小手，没碰到变普通箭头
+            canvas.style.cursor = isHoveringAny ? 'pointer' : 'default';
+        }
+
+        function resetAllExplosions() {
+            for (let i = 0; i < wordBounds.length; i++) {
+                wordBounds[i].isExploded = false;
+            }
+        }
+
+        // 给特定单词的粒子施加爆发力
+        function explodeWord(wordIndex) {
+            for (let i = 0; i < particleArray.length; i++) {
+                let p = particleArray[i];
+                if (p.wordIndex === wordIndex) {
+                    // 轻微爆炸力度，保持字形
+                    p.vx = (Math.random() - 0.5) * 12;
+                    p.vy = (Math.random() - 0.5) * 12; 
+                    p.targetAngle = (Math.random() - 0.5) * 60; // 产生错位感
+                }
+            }
+        }
+
+        class Particle {
+            constructor(x, y, size, baseColor, explodeColor, wordIndex) {
+                this.baseX = x;
+                this.baseY = y;
+                this.x = x;
+                this.y = y;
+                this.size = size;
+                
+                this.baseColor = baseColor;       // 平静时的颜色 (比如白色)
+                this.explodeColor = explodeColor; // 炸开时的颜色 (彩色)
+                this.wordIndex = wordIndex;       // 归属哪个单词
+                
+                this.vx = 0;
+                this.vy = 0;
+                this.friction = 0.85; 
+                this.ease = 0.1;     
+                this.airDrag = 0.75; // 空气阻力较大，保证炸开后很快停下，能看清字母
+                
+                this.angle = 0;
+                this.targetAngle = 0; 
+            }
+
+            draw() {
+                // 读取自己所属单词的爆炸状态
+                let isExploded = wordBounds[this.wordIndex].isExploded;
+                
+                // 【色彩魔法】：平时是素雅的白色，炸开瞬间呈现专属彩色
+                ctx.fillStyle = isExploded ? this.explodeColor : this.baseColor;
+                
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                
+                if (isExploded) {
+                    this.angle += (this.targetAngle - this.angle) * 0.2;
+                } else {
+                    this.angle += (0 - this.angle) * 0.2; 
+                }
+                
+                if (Math.abs(this.angle) > 0.1) {
+                    ctx.rotate(this.angle * Math.PI / 180);
+                }
+
+                let half = this.size / 2;
+                ctx.fillRect(-half, -half, this.size, this.size);
+                ctx.restore();
+            }
+
+            update() {
+                let isExploded = wordBounds[this.wordIndex].isExploded;
+
+                if (isExploded) {
+                    // 爆炸状态：失去原点引力，在空气阻力下悬停
+                    this.vx *= this.airDrag;
+                    this.vy *= this.airDrag;
+                    this.x += this.vx;
+                    this.y += this.vy;
+                } else {
+                    // 恢复状态：被弹簧拉回原位
+                    let dxBase = this.baseX - this.x;
+                    let dyBase = this.baseY - this.y;
+                    
+                    this.vx += dxBase * this.ease;
+                    this.vy += dyBase * this.ease;
+
+                    this.vx *= this.friction;
+                    this.vy *= this.friction;
+                    this.x += this.vx;
+                    this.y += this.vy;
+                }
+            }
+        }
+
+        function init() {
+            particleArray = [];
+            wordBounds = [];
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+
+            // 动态计算字体大小，缩小了一点以容纳新增的小图标，防止在小屏幕溢出
+            let fontSize = Math.min(canvas.width / 18, 60); 
+            ctx.font = `800 ${fontSize}px "Montserrat", sans-serif`;
+            
+            // 计算排版：让列表垂直居中
+            let gap = fontSize * 1.8; // 行间距
+            let totalHeight = gap * (menuItems.length - 1);
+            let startY = (canvas.height - totalHeight) / 2;
+
+            // 更新：恢复细腻的颗粒大小，确保字体边缘非常清晰
+            const step = 5; 
+
+            // 循环生成每个单词的粒子
+            menuItems.forEach((item, i) => {
+                let textMetrics = ctx.measureText(item.text);
+                let textWidth = textMetrics.width;
+                let textHeight = textMetrics.actualBoundingBoxAscent + textMetrics.actualBoundingBoxDescent;
+                
+                // 水平居中
+                let x = (canvas.width - textWidth) / 2;
+                let y = startY + i * gap;
+
+                // 记录这个单词的边界，用于鼠标触发检测
+                wordBounds.push({
+                    x: x,
+                    y: y - textMetrics.actualBoundingBoxAscent,
+                    w: textWidth,
+                    h: textHeight,
+                    isExploded: false
+                });
+
+                // 为了提取像素，先把它画出来
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#FFFFFF'; 
+                ctx.fillText(item.text, x, y);
+
+                // 获取刚刚画出来的单词像素数据
+                let data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+
+                // 性能优化：只扫描该单词边界附近的像素，不去扫全屏
+                let scanX = Math.max(0, Math.floor(x));
+                let scanY = Math.max(0, Math.floor(y - textMetrics.actualBoundingBoxAscent));
+                let scanW = Math.ceil(textWidth);
+                let scanH = Math.ceil(textHeight);
+
+                for (let sy = scanY; sy < scanY + scanH; sy += step) {
+                    for (let sx = scanX; sx < scanX + scanW; sx += step) {
+                        const index = (sy * canvas.width + sx) * 4;
+                        const alpha = data[index + 3];
+
+                        if (alpha > 128) { // 如果这里有文字像素
+                            // 随机从该单词的专属配色里挑一个颜色
+                            let explodeColor = item.colors[Math.floor(Math.random() * item.colors.length)];
+                            
+                            particleArray.push(new Particle(
+                                sx + step/2, 
+                                sy + step/2, 
+                                step * 1.2, 
+                                '#EAEAEA',     // 平静时的基础颜色：高级灰白
+                                explodeColor,  // 炸开时的专属颜色
+                                i              // 告诉粒子它属于哪个单词
+                            ));
+                        }
+                    }
+                }
+            });
+
+            // 提取完毕后清空真实画布，交由粒子去绘制
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            for (let i = 0; i < particleArray.length; i++) {
+                particleArray[i].update();
+                particleArray[i].draw();
+            }
+            requestAnimationFrame(animate);
+        }
+
+        // 更新：等待外部字体加载完毕后再初始化 Canvas，防止渲染出系统默认字体
+        document.fonts.ready.then(() => {
+            init();
+            animate();
+        });
+
+        // 响应窗口拉伸
+        let resizeTimer;
+        window.addEventListener('resize', function() {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(init, 200); // 防抖动处理
+        });
+
+    </script>
+</body>
+</html>
